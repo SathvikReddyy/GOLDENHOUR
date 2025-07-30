@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Driver Portal</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #fdf5f5; }
+    .container-box { max-width: 800px; margin: 50px auto; background: white; padding: 30px; border-radius: 10px; }
+    iframe { width: 100%; height: 500px; border: none; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container-box shadow">
+    <h3 class="text-center text-danger">🚑 Driver Portal</h3>
+
+    {% if map_available %}
+    <div class="status-message status-dispatched">
+      <i class="fas fa-map-marker-alt me-2"></i>You have been dispatched! Follow the map below.
+    </div>
+    
+    <div class="card my-3 text-start">
+      <div class="card-header fw-bold">
+        Patient Information
+      </div>
+      <div class="card-body">
+        <p><strong>Name:</strong> {{ dispatch.patient_name }}</p>
+        <p><strong>Mobile:</strong> {{ dispatch.patient_mobile }}</p>
+        <p><strong>Location (Lat, Lng):</strong> {{ dispatch.patient_location[0] }}, {{ dispatch.patient_location[1] }}</p>
+      </div>
+    </div>
+
+    <iframe src="{{ url_for('static', filename='ambulance_dispatch_map.html') }}"></iframe>
+    {% endif %}
+
+    <div class="text-center mt-4">
+      <a href="{{ url_for('logout') }}" class="btn btn-outline-dark">Logout</a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ambulance Dispatch System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-image: url("{{ url_for('static', filename='background.png            ') }}");
+            background-size: cover;
+            background-position: center;
+        }
+        .portal-container {
+            min-height: 100vh;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .portal-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            color: white;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            text-decoration: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        .portal-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            color: white;
+        }
+        .portal-card i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="portal-container">
+        <div class="container">
+            <h2 class="text-center text-white fw-bold mb-5">Ambulance Dispatch System</h2>
+            <div class="row g-4 justify-content-center">
+                <div class="col-md-4">
+                    <a href="{{ url_for('admin_login') }}" class="portal-card d-block">
+                        <i class="fas fa-user-shield text-danger"></i>
+                        <h4>Admin Portal</h4>
+                        <p>Dispatch Control Center</p>
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a href="{{ url_for('driver_login') }}" class="portal-card d-block">
+                        <i class="fas fa-ambulance text-success"></i>
+                        <h4>Driver Portal</h4>
+                        <p>View Assignments</p>
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a href="{{ url_for('user_login') }}" class="portal-card d-block">
+                        <i class="fas fa-user text-info"></i>
+                        <h4>User Portal</h4>
+                        <p>Book Ambulance</p>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

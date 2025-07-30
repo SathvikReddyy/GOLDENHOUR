@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Book an Ambulance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        body { 
+            background-color: #f4f7f6; 
+            font-family: 'Segoe UI', sans-serif;
+            overflow: hidden;
+        }
+        .dashboard-container { 
+            display: flex; 
+            height: 100vh; 
+        }
+        #map-container, #dispatch-map-container { 
+            flex-grow: 1; 
+            height: 100vh;
+        }
+        /* Style for the iframe to ensure it fills the container */
+        #dispatch-map-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .control-panel { 
+            width: 400px; 
+            background: white; 
+            padding: 30px; 
+            overflow-y: auto; 
+            box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .btn-danger {
+            background-color: #d9534f;
+            border-color: #d43f3a;
+            padding: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .user-details {
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-light bg-light justify-content-end" style="padding: 0.5rem 2rem;">
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+    </nav>
+    <div class="dashboard-container">
+        <div id="map-container">
+            {% if dispatched and dispatched.ambulance_name %}
+                <iframe id="dispatch-map-iframe" src="{{ url_for('static', filename='ambulance_dispatch_map.html') }}"></iframe>
+            {% else %}
+                <div id="map" style="height: 100%; width: 100%;"></div>
+            {% endif %}
+        </div>
+
+        <div class="control-panel">
+            <form id="bookingForm" method="POST" action="{{ url_for('user_portal') }}" class="d-flex flex-column h-100">
+                <input type="hidden" name="latitude" id="latitude">
+                <input type="hidden" name="longitude" id="longitude">
+
+                <div>
+                    <h3 class="text-center text-danger mb-4"><i class="fas fa-heartbeat me-2"></i>Emergency Booking</h3>
+                    
+                    <div class="user-details card">
+                        <div class="card-header fw-bold">Patient Details</div>
+                        <div class="card-body">
+                            <p class="mb-1"><strong>Name:</strong> <span>{{ user.name }}</span></p>
+                            <p class="mb-0"><strong>Mobile:</strong> <span>{{ user.phone_no }}</span></p>
+                        </div>
+                    </div>
+
+                    {% if dispatched and dispatched.ambulance_name %}
+                    <div id="dispatch-info" class="alert alert-success mt-4">
+                        <h5 class="alert-heading">✅ Dispatch Confirmed!</h5>
+                        <p class="mb-1"><strong>Ambulance:</strong> {{ dispatched.ambulance_name }}</p>
+                        <p class="mb-1"><strong>ETA to Patient:</strong> {{ dispatched.eta_to_patient }}</p>
+                        <p class="mb-1"><strong>Destination Hospital:</strong> {{ dispatched.hospital_name }}</p>
+                        <p class="mb-0"><strong>ETA to Hospital:</strong> {{ dispatched.eta_to_hospital }}</p>
+                    </div>
+                    {% else %}
+                    <div id="info-box" class="alert alert-info mt-4">
+                        <h5 class="alert-heading">Status</h5>
+                        <p id="status-text" class="mb-0">Click the button below to book an ambulance.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if not (dispatched and dispatched.ambulance_name) %}
+                <button type="submit" id="bookButton" class="btn btn-danger w-100 mt-auto">
+                    <i class="fas fa-ambulance me-2"></i>Book Nearest Ambulance
+                </button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='user.js') }}"></script>
+</body>
+</html>
