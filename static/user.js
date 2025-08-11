@@ -15,7 +15,7 @@ function initLiveMap() {
 function updateLocationOnMap(lat, lng) {
     if (!map) return;
     if (!marker) {
-        marker = L.marker([, ]).addTo(map);
+        marker = L.marker([lat,lng ]).addTo(map);
     } else {
         marker.setLatLng([lat, lng]);
     }
