@@ -5,7 +5,7 @@ from simulation import run_simulation_gmaps, GMAPS_API_KEY
 
 # Initialize the Flask Application
 app = Flask(__name__)
-app.secret_key = 'a_very_secret_key_for_your_portals'
+app.secret_key = 'AIzaSyCfGUtxuviXpo2G9kRdyp8-8loCkR8rxsA'
 
 # --- DATA & CREDENTIALS ---
 ADMIN_CREDENTIALS = {'username': 'admin', 'password': 'admin123'}

@@ -5,9 +5,19 @@ import googlemaps
 import time
 import requests
 
-# Initialize Google Maps client
-GMAPS_API_KEY = 'AIzaSyCfGUtxuviXpo2G9kRdyp8-8loCkR8rxsA'
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+
+# Access the API key
+GMAPS_API_KEY = os.getenv('MAPS_API_KEY')
+
+# Initialize the Google Maps client
 gmaps = googlemaps.Client(key=GMAPS_API_KEY)
+
 
 def find_closest_ambulance_gmaps(patient_location, fleet):
     closest_ambulance = None
