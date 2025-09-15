@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
 
     // IMPORTANT: Paste your Google Maps API Key here
-    const GMAPS_API_KEY = 'AIzaSyCfGUtxuviXpo2G9kRdyp8-8loCkR8rxsA';
+    const GMAPS_API_KEY = '';
 
     const map = L.map('map').setView([17.435, 78.47], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

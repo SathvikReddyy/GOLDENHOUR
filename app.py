@@ -2,10 +2,18 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 import time
 from simulation import run_simulation_gmaps, GMAPS_API_KEY
+import os
+from dotenv import load_dotenv
 
-# Initialize the Flask Application
+load_dotenv()
+
+# Access the keys
+SECRET_KEY = os.getenv('MAPS_API_KEY')
+
+# Initialize the Flask app
 app = Flask(__name__)
-app.secret_key = 'AIzaSyCfGUtxuviXpo2G9kRdyp8-8loCkR8rxsA'
+app.secret_key = SECRET_KEY
+
 
 # --- DATA & CREDENTIALS ---
 ADMIN_CREDENTIALS = {'username': 'admin', 'password': 'admin123'}
