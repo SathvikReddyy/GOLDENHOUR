@@ -147,12 +147,13 @@ def driver_toggle():
 
 
 @app.route('/driver/accept', methods=['POST'])
-def driver_accept():   # match JS function name
+def driver_accept():
     driver_id = session.get('driver')
     if not driver_id or driver_id not in ACTIVE_DISPATCHES:
         return jsonify({"status": "error", "message": "No active dispatch"}), 400
 
     dispatch = ACTIVE_DISPATCHES[driver_id]
+    dispatch['status'] = 'accepted'  # <-- top-level status for patient polling
     dispatch['ambulance']['status'] = 'accepted'
     DRIVER_STATUS[driver_id]['assigned'] = True
     DRIVER_STATUS[driver_id]['available'] = False
@@ -204,26 +205,87 @@ def user_portal():
     username = session['user']
     user_data = USER_DETAILS.get(username)
 
+    # define fleets/hospitals here (same as simulation)
+    private_fleet = [
+        {"id": 1, "name": "Ambulance Secunderabad Station", "location": (17.4360, 78.5020), "username": "secunderabad_driver", "type": "private"},
+        {"id": 2, "name": "Ambulance Nampally", "location": (17.3915, 78.4633), "username": "nampally_driver", "type": "private"},
+        {"id": 5, "name": "Ambulance Hitec City", "location": (17.4474, 78.3762), "username": "hitec_driver", "type": "private"},
+        {"id": 6, "name": "Ambulance Gachibowli", "location": (17.4401, 78.3489), "username": "gachibowli_driver", "type": "private"},
+    ]
+    govt_fleet = [
+        {"id": 3, "name": "Ambulance Banjara Hills", "location": (17.4148, 78.4418), "username": "banjara_driver", "type": "government"},
+        {"id": 4, "name": "Ambulance Ameerpet", "location": (17.4375, 78.4483), "username": "ameerpet_driver", "type": "government"},
+        {"id": 7, "name": "Ambulance Kukatpally (KPHB)", "location": (17.4848, 78.4138), "username": "kukatpally_driver", "type": "government"},
+        {"id": 8, "name": "Ambulance Madhapur", "location": (17.4504, 78.3973), "username": "madhapur_driver", "type": "government"},
+    ]
+    hospitals = [
+        {"name": "Osmania General Hospital", "location": (17.3753, 78.4747)},
+        {"name": "Apollo Hospitals, Jubilee Hills", "location": (17.4202, 78.4013)},
+    ]
+
     if request.method == 'POST':
         try:
             lat = float(request.form.get('latitude', 0))
             lon = float(request.form.get('longitude', 0))
         except ValueError:
             return "Invalid coordinates", 400
-        ambulance_type = request.form.get('ambulance_type', 'private')
 
-        dispatched = run_simulation_gmaps((lat, lon), selected_type=ambulance_type)
+        ambulance_type = request.form.get('ambulance_type', 'private').lower()
+
+        # run simulation and pass current driver statuses (so simulation only picks available drivers)
+        dispatched = run_simulation_gmaps((lat, lon), selected_type=ambulance_type, driver_status=DRIVER_STATUS)
+
+        # if simulation returned a valid ambulance assignment, keep it in session & ACTIVE_DISPATCHES
         if dispatched:
             dispatched['patient_name'] = user_data['name']
             dispatched['patient_mobile'] = user_data['phone_no']
             dispatched['patient_location'] = (lat, lon)
 
+            # Add these 👇 so template conditions work
+            dispatched['ambulance_name'] = dispatched['ambulance']['name']
+            dispatched['ambulance_type'] = dispatched['ambulance'].get('type', 'unknown')
+
+            dispatched['hospital_name'] = dispatched.get('hospital', {}).get('name', 'Unknown Hospital')
+
             driver_username = dispatched['ambulance']['username']
             ACTIVE_DISPATCHES[driver_username] = dispatched
             DRIVER_STATUS[driver_username] = {'on_duty': True, 'assigned': True}
             session['dispatch_info'] = dispatched
+        else:
+            # no ambulance available — clear dispatch_info
+            session.pop('dispatch_info', None)
 
-    return render_template('user_portal.html', dispatched=session.get('dispatch_info'), user=user_data)
+
+    return render_template(
+        'user_portal.html',
+        dispatched=session.get('dispatch_info'),
+        user=user_data,
+        govt_ambulances=govt_fleet,
+        private_ambulances=private_fleet,
+        hospitals=hospitals,
+    )
+
+@app.route("/check_status")
+def check_status():
+    dispatch_info = session.get("dispatch_info")
+    if not dispatch_info:
+        return {"status": "no_request"}
+
+    driver_username = dispatch_info["ambulance"]["username"]
+    latest_dispatch = ACTIVE_DISPATCHES.get(driver_username)
+
+    if latest_dispatch and latest_dispatch.get("status") == "accepted":
+        return {
+            "status": "accepted",
+            "driver_name": latest_dispatch["ambulance"]["name"],
+            "driver_username": driver_username,
+            "ambulance_type": latest_dispatch["ambulance"].get("type", "unknown"),
+            "hospital_name": latest_dispatch.get("hospital", {}).get("name", "Unknown"),
+            "eta_to_patient": latest_dispatch.get("eta_to_patient", "N/A"),
+            "eta_to_hospital": latest_dispatch.get("eta_to_hospital", "N/A"),
+            "map_url": latest_dispatch.get("map_url")
+        }
+    return {"status": "waiting"}
 
 # --- LOGOUT ---
 @app.route('/logout')

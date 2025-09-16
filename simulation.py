@@ -117,24 +117,50 @@ def run_simulation_gmaps(patient_location, selected_type='private', driver_statu
     fleet = private_fleet if selected_type == 'private' else govt_fleet
 
     # --- Find closest available ambulance ---
-    ambulance, _ = find_closest_available_ambulance(patient_location, fleet, driver_status)
+    ambulance, route_to_patient  = find_closest_available_ambulance(patient_location, fleet, driver_status)
     if not ambulance:
         return {"status": "waiting"}  # no driver available
 
     # Mark as assigned in driver_status
+    # Use existing driver_status passed from app.py
     driver_status.setdefault(ambulance['username'], {'on_duty': True, 'assigned': False})
-    driver_status[ambulance['username']]['assigned'] = True
-    ambulance['available'] = False
+
+    ambulance['available'] = True
+
 
     # Find closest hospital
-    hospital, _ = find_closest_hospital_gmaps(patient_location, hospitals)
+    hospital, route_to_hospital  = find_closest_hospital_gmaps(patient_location, hospitals)
 
-    # --- Folium Map ---
+    eta_to_patient = "N/A"
+    eta_to_hospital = "N/A"
+
+    if route_to_patient := find_closest_available_ambulance(patient_location, fleet, driver_status)[1]:
+        leg = route_to_patient['legs'][0]
+        eta_to_patient = leg.get('duration_in_traffic', leg.get('duration'))['text']
+
+    if route_to_hospital := find_closest_hospital_gmaps(patient_location, hospitals)[1]:
+        leg = route_to_hospital['legs'][0]
+        eta_to_hospital = leg.get('duration_in_traffic', leg.get('duration'))['text']
+
     m = folium.Map(location=patient_location, zoom_start=13)
     folium.Marker(location=patient_location, popup="🧍‍♂ Patient", icon=folium.Icon(color='red', icon='user', prefix='fa')).add_to(m)
-    folium.Marker(location=hospital['location'], popup=f"🏥 {hospital['name']}", icon=folium.Icon(color='orange', icon='plus', prefix='fa')).add_to(m)
-    folium.Marker(location=ambulance['location'], popup=f"🚑 {ambulance['name']} - Waiting for driver",
-                  icon=folium.Icon(color='gray', icon='ambulance', prefix='fa')).add_to(m)
+    # --- Display all hospitals ---
+    for hosp in hospitals:
+        folium.Marker(
+            location=hosp['location'],
+            popup=f"🏥 {hosp['name']}",
+            icon=folium.Icon(color='orange', icon='plus', prefix='fa')
+        ).add_to(m)
+
+    # --- Display all ambulances ---
+    for amb in private_fleet + govt_fleet:
+        status_text = "🚑 Waiting for driver" if amb['username'] == ambulance['username'] else "🚑 Available"
+        folium.Marker(
+            location=amb['location'],
+            popup=f"{amb['name']} - {status_text}",
+            icon=folium.Icon(color='gray', icon='ambulance', prefix='fa')
+        ).add_to(m)
+
     draw_route(ambulance['location'], patient_location, m, color='blue')
     draw_route(patient_location, hospital['location'], m, color='red')
     m.save("static/ambulance_dispatch_map.html")
@@ -143,5 +169,8 @@ def run_simulation_gmaps(patient_location, selected_type='private', driver_statu
         "status": "waiting",
         "ambulance": {"username": ambulance['username'], "name": ambulance['name'], "status": "waiting"},
         "hospital": {"name": hospital['name']},
-        "patient_location": patient_location
+        "patient_location": patient_location,
+        "eta_to_patient": eta_to_patient,
+        "eta_to_hospital": eta_to_hospital
     }
+

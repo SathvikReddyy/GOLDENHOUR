@@ -12,6 +12,31 @@ function initLiveMap() {
     }).addTo(map);
 }
 
+function loadAmbulancesAndHospitals(ambulances, hospitals) {
+    if (!map) return;
+
+    // Show hospitals
+    hospitals.forEach(hospital => {
+        L.marker(hospital.location, {
+            icon: L.icon({
+                iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
+                iconSize: [30, 30]
+            })
+        }).addTo(map).bindPopup(`🏥 ${hospital.name}`);
+    });
+
+    // Show ambulances
+    ambulances.forEach(amb => {
+        let color = (amb.type && amb.type.toLowerCase() === "government") ? "blue" : "green";
+        L.marker(amb.location, {
+            icon: L.divIcon({
+                className: "custom-marker",
+                html: `<i class="fa-solid fa-ambulance" style="color:${color}; font-size:20px;"></i>`
+            })
+        }).addTo(map).bindPopup(`🚑 ${amb.name} (${amb.type || 'unknown'})`);
+    });
+}
+
 // Update marker position on the map
 function updateLocationOnMap(lat, lng) {
     if (!map) return;
@@ -30,7 +55,9 @@ function setUrgency(level) {
         .find(btn => btn.innerText.includes(level));
     if (selectedBtn) selectedBtn.classList.add('active');
 
-    document.getElementById('status-text').innerText = `Urgency selected: ${level}. Waiting for live location...`;
+    if (document.getElementById('status-text')) {
+        document.getElementById('status-text').innerText = `Urgency selected: ${level}. Waiting for live location...`;
+    }
     checkIfReady();
 }
 
@@ -41,20 +68,28 @@ function checkIfReady() {
 
     if (locationSet && urgencySet) {
         bookButton.disabled = false;
-        document.getElementById('status-text').innerText = `✅ Ready! You can now book an ambulance.`;
+        if (document.getElementById('status-text')) document.getElementById('status-text').innerText = `✅ Ready! You can now book an ambulance.`;
     } else {
         bookButton.disabled = true;
     }
 }
 
-// Confirm booking: ensure ambulance type is selected
 function confirmBooking() {
     const selectedType = document.querySelector('input[name="ambTypeOptions"]:checked');
     if (!selectedType) {
         alert("Please select an ambulance type.");
         return;
     }
-    document.getElementById('ambulance_type').value = selectedType.value;
+
+    // normalise to lower-case values expected by server/simulation
+    document.getElementById('ambulance_type').value = selectedType.value.toLowerCase();
+
+    // Close the modal before submitting
+    const modalEl = document.getElementById('ambulanceTypeModal');
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    modal.hide();
+
+    // Submit the booking form
     document.getElementById('bookingForm').submit();
 }
 
@@ -75,7 +110,7 @@ function startLiveLocationTracking() {
             checkIfReady();
         },
         () => {
-            document.getElementById('status-text').innerText = 'Unable to retrieve your location.';
+            if (document.getElementById('status-text')) document.getElementById('status-text').innerText = 'Unable to retrieve your location.';
             locationSet = false;
             checkIfReady();
         },
