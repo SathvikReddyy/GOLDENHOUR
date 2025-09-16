@@ -4,38 +4,110 @@
   <meta charset="UTF-8">
   <title>Driver Portal</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
   <style>
     body { background-color: #fdf5f5; }
     .container-box { max-width: 800px; margin: 50px auto; background: white; padding: 30px; border-radius: 10px; }
     iframe { width: 100%; height: 500px; border: none; margin-top: 20px; }
+    .toggle-switch { display: flex; align-items: center; margin-bottom: 20px; }
+    .toggle-switch input { margin-right: 10px; }
+    .btn-action { margin-right: 10px; }
   </style>
 </head>
 <body>
   <div class="container-box shadow">
     <h3 class="text-center text-danger">🚑 Driver Portal</h3>
 
-    {% if map_available %}
-    <div class="status-message status-dispatched">
-      <i class="fas fa-map-marker-alt me-2"></i>You have been dispatched! Follow the map below.
-    </div>
-    
-    <div class="card my-3 text-start">
-      <div class="card-header fw-bold">
-        Patient Information
-      </div>
-      <div class="card-body">
-        <p><strong>Name:</strong> {{ dispatch.patient_name }}</p>
-        <p><strong>Mobile:</strong> {{ dispatch.patient_mobile }}</p>
-        <p><strong>Location (Lat, Lng):</strong> {{ dispatch.patient_location[0] }}, {{ dispatch.patient_location[1] }}</p>
-      </div>
+    <!-- On-Duty / Off-Duty Toggle -->
+    <div class="toggle-switch">
+      <input type="checkbox" id="toggleDuty" {% if status['on_duty'] %}checked{% endif %}>
+      <label for="toggleDuty" class="fw-bold">On Duty</label>
     </div>
 
-    <iframe src="{{ url_for('static', filename='ambulance_dispatch_map.html') }}"></iframe>
+    {% if dispatch %}
+      <div class="status-message alert alert-info p-2">
+        {% if dispatch['ambulance']['status'] == 'waiting' %}
+          ⏳ Waiting for your acceptance
+        {% elif dispatch['ambulance']['status'] == 'accepted' %}
+          ✅ Ride accepted
+        {% endif %}
+      </div>
+    
+      <div class="card my-3 text-start">
+        <div class="card-header fw-bold">Patient Information</div>
+        <div class="card-body">
+          <p><strong>Name:</strong> {{ dispatch['patient_name'] }}</p>
+          <p><strong>Mobile:</strong> {{ dispatch['patient_mobile'] }}</p>
+          <p><strong>Location (Lat, Lng):</strong> {{ dispatch['patient_location'][0] }}, {{ dispatch['patient_location'][1] }}</p>
+          <p><strong>ETA to Patient:</strong> {{ dispatch['ambulance']['eta_to_patient'] }}</p>
+        </div>
+      </div>
+
+      <div class="card my-3 text-start">
+        <div class="card-header fw-bold">Ambulance & Hospital</div>
+        <div class="card-body">
+          <p><strong>Ambulance Name:</strong> {{ dispatch['ambulance']['name'] }}</p>
+          <p><strong>Hospital:</strong> {{ dispatch['hospital']['name'] }}</p>
+          <p><strong>ETA to Hospital:</strong> {{ dispatch['hospital']['eta_to_hospital'] }}</p>
+        </div>
+      </div>
+
+      <!-- Accept / Deny -->
+<div class="text-center mb-3">
+  <button class="btn btn-success btn-action" onclick="acceptRide()" 
+    {% if dispatch['ambulance']['status'] == 'accepted' %}disabled{% endif %}>Accept Ride</button>
+  <button class="btn btn-danger btn-action" onclick="denyRide()" 
+    {% if dispatch['ambulance']['status'] == 'accepted' %}disabled{% endif %}>Deny Ride</button>
+</div>
+
+
+      <!-- Map iframe -->
+      <iframe src="{{ url_for('static', filename='ambulance_dispatch_map.html') }}"></iframe>
+
+      <!-- Complete Ride Button -->
+      <div class="text-center mt-3">
+        <button class="btn btn-primary" id="completeRideBtn" onclick="completeRide()" 
+          {% if dispatch['ambulance']['status'] != 'accepted' %}disabled{% endif %}>Complete Ride</button>
+      </div>
+
+    {% else %}
+      <div class="alert alert-secondary text-center">No current dispatch.</div>
     {% endif %}
 
     <div class="text-center mt-4">
       <a href="{{ url_for('logout') }}" class="btn btn-outline-dark">Logout</a>
     </div>
   </div>
+
+<script>
+// Accept Ride
+function acceptRide() {
+    fetch('/driver/accept', { method: 'POST' })
+        .then(res => location.reload());
+}
+
+// Deny Ride
+function denyRide() {
+    fetch('/driver/deny', { method: 'POST' })
+        .then(res => location.reload());
+}
+
+
+// Complete Ride
+function completeRide() {
+    fetch('/driver/complete', { method: 'POST' })
+        .then(res => location.reload());
+}
+
+
+// Toggle On-Duty / Off-Duty
+document.getElementById('toggleDuty').addEventListener('change', function() {
+    fetch('/driver/toggle', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({on_duty: this.checked})
+    }).then(res => location.reload());
+});
+</script>
 </body>
 </html>

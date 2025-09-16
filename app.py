@@ -1,36 +1,26 @@
-# app.py
-from flask import Flask, render_template, request, redirect, url_for, session
-import time
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from simulation import run_simulation_gmaps, GMAPS_API_KEY
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
-
-# Access the keys
 SECRET_KEY = os.getenv('MAPS_API_KEY')
 
-# Initialize the Flask app
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
-
-# --- DATA & CREDENTIALS ---
+# --- CREDENTIALS ---
 ADMIN_CREDENTIALS = {'username': 'admin', 'password': 'admin123'}
 DRIVER_CREDENTIALS = {
-    "secunderabad_driver": "sec123", "nampally_driver": "namp123", "banjara_driver": "ban123",
-    "ameerpet_driver": "ame123", "hitec_driver": "hitec123", "gachibowli_driver": "gachi123",
-    "kukatpally_driver": "kphb123", "madhapur_driver": "madha123", "uppal_driver": "uppal123",
-    "lbnagar_driver": "lbn123", "tarnaka_driver": "tar123", "dilsukhnagar_driver": "dilsuk123",
-    "kompally_driver": "kom123", "alwal_driver": "alwal123", "bowenpally_driver": "bowen123",
-    "jeedimetla_driver": "jeedi123", "charminar_driver": "char123", "shamshabad_driver": "sham123",
-    "mehdipatnam_driver": "mehd123", "falaknuma_driver": "fala123", "narsapur_driver": "nar123" 
+    "secunderabad_driver": "sec123", "nampally_driver": "namp123",
+    "banjara_driver": "ban123", "ameerpet_driver": "ame123",
+    "hitec_driver": "hitec123", "gachibowli_driver": "gachi123",
+    "kukatpally_driver": "kphb123", "madhapur_driver": "madha123"
 }
 USER_CREDENTIALS = {
-    "Sathvik_Reddy": "sathvik123",
-    "Rakshith_Raj": "rakshith123",
-    "Mani_Kanta": "mani123",
-    "Abhinav_Sharma": "abhinav123"
+    "Sathvik_Reddy": "sathvik123", "Rakshith_Raj": "rakshith123",
+    "Mani_Kanta": "mani123", "Abhinav_Sharma": "abhinav123"
 }
 USER_DETAILS = {
     "Sathvik_Reddy": {"name": "Sathvik Reddy", "phone_no": "7989154351"},
@@ -39,17 +29,17 @@ USER_DETAILS = {
     "Abhinav_Sharma": {"name": "Abhinav", "phone_no": "8328660108"}
 }
 
-# NEW: Use this dictionary to track active assignments for drivers
-# This is shared across all sessions, but is keyed by driver username
-ACTIVE_DISPATCHES = {}
+# --- Track dispatches & driver status ---
+ACTIVE_DISPATCHES = {}  # {driver_username: dispatch_info}
+DRIVER_STATUS = {}      # {driver_username: {'on_duty': True/False, 'assigned': True/False}}
 
-# --- MAIN ROUTE ---
+# --- HOME ---
 @app.route('/')
 def home():
     return render_template('index.html')
 
-# --- ADMIN PORTAL ROUTES ---
-@app.route('/admin/login', methods=['GET', 'POST'])
+# --- ADMIN ---
+@app.route('/admin/login', methods=['GET','POST'])
 def admin_login():
     if request.method == 'POST':
         if request.form.get('username') == ADMIN_CREDENTIALS['username'] and request.form.get('password') == ADMIN_CREDENTIALS['password']:
@@ -64,75 +54,149 @@ def admin_dashboard():
     if 'admin' not in session:
         return redirect(url_for('admin_login'))
 
+    dispatched = None  # Initialize
+
     if request.method == 'POST':
         lat = float(request.form['latitude'])
         lng = float(request.form['longitude'])
         patient_location = (lat, lng)
-        
-        dispatched = run_simulation_gmaps(patient_location, GMAPS_API_KEY)
-        
+        ambulance_type = request.form.get('ambulance_type', 'private')
+
+        # Pass DRIVER_STATUS to simulation
+        dispatched = run_simulation_gmaps(patient_location, selected_type=ambulance_type, driver_status=DRIVER_STATUS)
+
+
         if dispatched:
-            # Attach patient info to dispatched dict for admin and driver
             dispatched['patient_name'] = request.form.get('name', 'Unknown')
             dispatched['patient_mobile'] = request.form.get('mobile', 'Unknown')
-            dispatched['patient_location'] = (lat, lng)
+            dispatched['patient_location'] = patient_location
 
-            # Store dispatch in the admin's session
-            session['admin_dispatch'] = dispatched
-            # Make the dispatch available for the assigned driver
-            driver_username = dispatched['ambulance_username']
+            # Safe extraction
+            dispatched['ambulance_name'] = dispatched['ambulance']['name']
+            dispatched['hospital_name'] = dispatched.get('hospital', {}).get('name', 'Unknown Hospital')
+            dispatched['eta_to_patient'] = dispatched.get('eta_to_patient', 'N/A')
+            dispatched['eta_to_hospital'] = dispatched.get('eta_to_hospital', 'N/A')
+
+            driver_username = dispatched['ambulance']['username']
             ACTIVE_DISPATCHES[driver_username] = dispatched
-        
-        return render_template(
-            'admin_dashboard.html', 
-            dispatched=session.get('admin_dispatch')
-        )
+            DRIVER_STATUS[driver_username] = {'on_duty': True, 'assigned': True}
 
-    return render_template('admin_dashboard.html', dispatched=session.get('admin_dispatch'))
 
-# --- DRIVER PORTAL ROUTES ---
-@app.route('/driver/login', methods=['GET', 'POST'])
+
+    # Pass the dispatched info (None if no dispatch yet)
+    return render_template('admin_dashboard.html', dispatched=dispatched)
+
+
+# --- DRIVER LOGIN ---
+
+@app.route('/driver/login', methods=['GET','POST'])
 def driver_login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         if username in DRIVER_CREDENTIALS and DRIVER_CREDENTIALS[username] == password:
             session['driver'] = username
+            DRIVER_STATUS.setdefault(username, {'on_duty': True, 'assigned': False})
             return redirect(url_for('driver_portal'))
         else:
             return render_template('driver_login.html', error="Invalid Credentials")
     return render_template('driver_login.html')
+@app.route('/get_dispatch_status')
+def get_dispatch_status():
+    driver_id = session.get('driver')
+    if not driver_id:
+        return jsonify({"error": "Not logged in"}), 401
 
-@app.route('/driver/portal')
+    dispatch = ACTIVE_DISPATCHES.get(driver_id)
+    if not dispatch:
+        return jsonify({"status": "no_active_dispatch"})
+
+    return jsonify(dispatch)
+
+
+@app.route('/driver/portal', methods=['GET', 'POST'])
 def driver_portal():
     if 'driver' not in session:
         return redirect(url_for('driver_login'))
 
     driver_id = session['driver']
-    # Check the shared active dispatches for this driver's assignment
-    assigned_dispatch = ACTIVE_DISPATCHES.get(driver_id)
-    
-    if assigned_dispatch:
-        return render_template('driver_map.html', map_available=True, dispatch=assigned_dispatch)
-    
-    return render_template('driver_map.html', map_available=False)
+    status = DRIVER_STATUS.get(driver_id, {'on_duty': True, 'assigned': False, 'available': True})
+    status['available'] = status['on_duty'] and not status['assigned']
+    DRIVER_STATUS[driver_id] = status
 
-# --- USER PORTAL ROUTES (FIXED) ---
-@app.route('/user/login', methods=['GET', 'POST'])
+    dispatch = ACTIVE_DISPATCHES.get(driver_id)
+    return render_template('driver_map.html', dispatch=dispatch, status=status)
+
+
+# --- DRIVER ACTIONS ---
+@app.route('/driver/toggle', methods=['POST'])
+def driver_toggle():
+    driver_id = session.get('driver')
+    if not driver_id:
+        return jsonify({"error":"Not logged in"}), 401
+
+    data = request.get_json()
+    on_duty = data.get('on_duty', True)
+
+    status = DRIVER_STATUS.get(driver_id, {'on_duty': True, 'assigned': False, 'available': True})
+    status['on_duty'] = on_duty
+    status['available'] = status['on_duty'] and not status['assigned']
+    DRIVER_STATUS[driver_id] = status
+
+    return jsonify({"on_duty": on_duty, "available": status['available']})
+
+
+@app.route('/driver/accept', methods=['POST'])
+def driver_accept():   # match JS function name
+    driver_id = session.get('driver')
+    if not driver_id or driver_id not in ACTIVE_DISPATCHES:
+        return jsonify({"status": "error", "message": "No active dispatch"}), 400
+
+    dispatch = ACTIVE_DISPATCHES[driver_id]
+    dispatch['ambulance']['status'] = 'accepted'
+    DRIVER_STATUS[driver_id]['assigned'] = True
+    DRIVER_STATUS[driver_id]['available'] = False
+
+    return jsonify({"status": "success", "message": "Ride accepted"})
+
+
+@app.route('/driver/deny', methods=['POST'])
+def driver_deny():    # match JS function name
+    driver_id = session.get('driver')
+    if not driver_id or driver_id not in ACTIVE_DISPATCHES:
+        return jsonify({"status": "error", "message": "No active dispatch"}), 400
+
+    ACTIVE_DISPATCHES.pop(driver_id)
+    DRIVER_STATUS[driver_id]['assigned'] = False
+    DRIVER_STATUS[driver_id]['available'] = True
+
+    return jsonify({"status": "success", "message": "Ride denied"})
+@app.route('/driver/complete', methods=['POST'])
+def driver_complete():
+    driver_id = session.get('driver')
+    if driver_id and driver_id in ACTIVE_DISPATCHES:
+        ACTIVE_DISPATCHES.pop(driver_id)
+        DRIVER_STATUS[driver_id]['assigned'] = False
+        DRIVER_STATUS[driver_id]['available'] = DRIVER_STATUS[driver_id]['on_duty']
+        return jsonify({"status":"completed"})
+    return jsonify({"error":"No ride assigned"}), 400
+
+# --- USER LOGIN ---
+@app.route('/user/login', methods=['GET','POST'])
 def user_login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         if username in USER_CREDENTIALS and USER_CREDENTIALS[username] == password:
             session['user'] = username
-            # Clear any old dispatch info when a new user logs in
-            session.pop('dispatch_info', None) 
+            session.pop('dispatch_info', None)
             return redirect(url_for('user_portal'))
         else:
             return render_template('user_login.html', error="Invalid Credentials")
     return render_template('user_login.html')
 
-@app.route('/user/portal', methods=['GET', 'POST'])
+# --- USER PORTAL ---
+@app.route('/user/portal', methods=['GET','POST'])
 def user_portal():
     if 'user' not in session:
         return redirect(url_for('user_login'))
@@ -141,44 +205,33 @@ def user_portal():
     user_data = USER_DETAILS.get(username)
 
     if request.method == 'POST':
-        lat_str = request.form.get('latitude', '').strip()
-        lon_str = request.form.get('longitude', '').strip()
-        if not lat_str or not lon_str:
-            return "Latitude and Longitude are required", 400
         try:
-            lat = float(lat_str)
-            lon = float(lon_str)
+            lat = float(request.form.get('latitude', 0))
+            lon = float(request.form.get('longitude', 0))
         except ValueError:
-            return "Invalid latitude or longitude value", 400
-        patient_location = (lat, lon)
+            return "Invalid coordinates", 400
+        ambulance_type = request.form.get('ambulance_type', 'private')
 
-        dispatched = run_simulation_gmaps(patient_location, GMAPS_API_KEY)
-
+        dispatched = run_simulation_gmaps((lat, lon), selected_type=ambulance_type)
         if dispatched:
-            # Add patient info to dispatched dict for driver portal
-            dispatched['patient_name'] = user_data['name'] if user_data else 'Unknown'
-            dispatched['patient_mobile'] = user_data['phone_no'] if user_data else 'Unknown'
+            dispatched['patient_name'] = user_data['name']
+            dispatched['patient_mobile'] = user_data['phone_no']
             dispatched['patient_location'] = (lat, lon)
 
-            # Store the dispatch info ONLY in this user's session
-            session['dispatch_info'] = dispatched
-            # Make the dispatch available for the assigned driver
-            driver_username = dispatched['ambulance_username']
+            driver_username = dispatched['ambulance']['username']
             ACTIVE_DISPATCHES[driver_username] = dispatched
+            DRIVER_STATUS[driver_username] = {'on_duty': True, 'assigned': True}
+            session['dispatch_info'] = dispatched
 
-    # Get dispatch info from the session, not a global variable
-    dispatched_data = session.get('dispatch_info')
-    return render_template('user_portal.html', dispatched=dispatched_data, user=user_data)
+    return render_template('user_portal.html', dispatched=session.get('dispatch_info'), user=user_data)
 
-
-# --- SHARED LOGOUT ROUTE ---
+# --- LOGOUT ---
 @app.route('/logout')
 def logout():
-    # If a driver logs out, remove their completed job from active dispatches
-    if 'driver' in session:
-        driver_id = session.get('driver')
+    driver_id = session.get('driver')
+    if driver_id:
         ACTIVE_DISPATCHES.pop(driver_id, None)
-
+        DRIVER_STATUS[driver_id]['assigned'] = False
     session.clear()
     return redirect(url_for('home'))
 

@@ -1,41 +1,83 @@
-// Live location tracking for patient (user portal)
-// Uses browser Geolocation API and Leaflet for map display
-
 let map, marker;
+let locationSet = false;
+let urgencySet = false;
 
+// Initialize Leaflet map
 function initLiveMap() {
-    if (!document.getElementById('map')) return;
-    map = L.map('map').setView([20.5937, 78.9629], 5); // Default: India center
+    const mapDiv = document.getElementById('map');
+    if (!mapDiv) return;
+    map = L.map('map').setView([20.5937, 78.9629], 5); // Default view: India
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap'
+        maxZoom: 19, attribution: '© OpenStreetMap'
     }).addTo(map);
 }
 
+// Update marker position on the map
 function updateLocationOnMap(lat, lng) {
     if (!map) return;
-    if (!marker) {
-        marker = L.marker([lat,lng ]).addTo(map);
-    } else {
-        marker.setLatLng([lat, lng]);
-    }
+    if (!marker) marker = L.marker([lat, lng]).addTo(map);
+    else marker.setLatLng([lat, lng]);
     map.setView([lat, lng], 15);
 }
 
-function startLiveLocationTracking() {
-    if (!navigator.geolocation) {
-        alert('Geolocation is not supported by your browser');
+// Set urgency level when a triage button is clicked
+function setUrgency(level) {
+    document.getElementById('urgency').value = level;
+    urgencySet = true;
+
+    document.querySelectorAll('.triage-buttons .btn').forEach(btn => btn.classList.remove('active'));
+    const selectedBtn = Array.from(document.querySelectorAll('.triage-buttons .btn'))
+        .find(btn => btn.innerText.includes(level));
+    if (selectedBtn) selectedBtn.classList.add('active');
+
+    document.getElementById('status-text').innerText = `Urgency selected: ${level}. Waiting for live location...`;
+    checkIfReady();
+}
+
+// Enable booking button only if location & urgency are set
+function checkIfReady() {
+    const bookButton = document.getElementById('bookButton');
+    if (!bookButton) return;
+
+    if (locationSet && urgencySet) {
+        bookButton.disabled = false;
+        document.getElementById('status-text').innerText = `✅ Ready! You can now book an ambulance.`;
+    } else {
+        bookButton.disabled = true;
+    }
+}
+
+// Confirm booking: ensure ambulance type is selected
+function confirmBooking() {
+    const selectedType = document.querySelector('input[name="ambTypeOptions"]:checked');
+    if (!selectedType) {
+        alert("Please select an ambulance type.");
         return;
     }
+    document.getElementById('ambulance_type').value = selectedType.value;
+    document.getElementById('bookingForm').submit();
+}
+
+// Track user's live location using browser geolocation
+function startLiveLocationTracking() {
+    if (!navigator.geolocation) {
+        alert('Geolocation not supported');
+        return;
+    }
+
     navigator.geolocation.watchPosition(
         (position) => {
             const { latitude, longitude } = position.coords;
             document.getElementById('latitude').value = latitude;
             document.getElementById('longitude').value = longitude;
             updateLocationOnMap(latitude, longitude);
+            locationSet = true;
+            checkIfReady();
         },
-        (error) => {
-            alert('Unable to retrieve your location: ' + error.message);
+        () => {
+            document.getElementById('status-text').innerText = 'Unable to retrieve your location.';
+            locationSet = false;
+            checkIfReady();
         },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
@@ -43,53 +85,6 @@ function startLiveLocationTracking() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initLiveMap();
-    // Disable the submit button by default
-    const bookButton = document.getElementById('bookButton');
-    if (bookButton) bookButton.disabled = true;
-    let locationSet = false;
-
-    function enableButtonIfReady() {
-        const lat = document.getElementById('latitude').value;
-        const lon = document.getElementById('longitude').value;
-        if (lat && lon && !isNaN(lat) && !isNaN(lon)) {
-            locationSet = true;
-            if (bookButton) bookButton.disabled = false;
-            document.getElementById('status-text').innerText = 'Live location acquired. You can now book an ambulance.';
-        }
-    }
-
-    // Patch startLiveLocationTracking to enable button when ready
-    function patchedStartLiveLocationTracking() {
-        if (!navigator.geolocation) {
-            alert('Geolocation is not supported by your browser');
-            return;
-        }
-        navigator.geolocation.watchPosition(
-            (position) => {
-                const { latitude, longitude } = position.coords;
-                document.getElementById('latitude').value = latitude;
-                document.getElementById('longitude').value = longitude;
-                updateLocationOnMap(latitude, longitude);
-                enableButtonIfReady();
-            },
-            (error) => {
-                document.getElementById('status-text').innerText = 'Unable to retrieve your location. Please enable location services and reload the page.';
-                if (bookButton) bookButton.disabled = true;
-            },
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-        );
-    }
-
-    patchedStartLiveLocationTracking();
-
-    // Prevent form submission if location is not set
-    const bookingForm = document.getElementById('bookingForm');
-    if (bookingForm) {
-        bookingForm.addEventListener('submit', function(e) {
-            if (!locationSet) {
-                e.preventDefault();
-                document.getElementById('status-text').innerText = 'Waiting for your live location. Please allow location access.';
-            }
-        });
-    }
+    startLiveLocationTracking();
+    if (document.getElementById('bookButton')) document.getElementById('bookButton').disabled = true;
 });

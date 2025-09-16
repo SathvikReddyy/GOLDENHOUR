@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Call the error function
             handleError(error);
         });
-    });
+    });        
 
     // Modified success function
     function success(location, accuracy) {
