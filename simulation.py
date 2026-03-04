@@ -1,3 +1,4 @@
+#Simulation.py 
 import os
 import time
 import requests
@@ -119,7 +120,14 @@ def run_simulation_gmaps(patient_location, selected_type='private', driver_statu
     # --- Find closest available ambulance ---
     ambulance, route_to_patient  = find_closest_available_ambulance(patient_location, fleet, driver_status)
     if not ambulance:
-        return {"status": "waiting"}  # no driver available
+        return {
+            "status": "no_ambulance",
+            "ambulance": None,
+            "hospital": None,
+            "eta_to_patient": "N/A",
+            "eta_to_hospital": "N/A"
+        }
+ # no driver available
 
     # Mark as assigned in driver_status
     # Use existing driver_status passed from app.py
@@ -166,11 +174,20 @@ def run_simulation_gmaps(patient_location, selected_type='private', driver_statu
     m.save("static/ambulance_dispatch_map.html")
 
     return {
+    "status": "waiting",
+    "ambulance": {
+        "username": ambulance['username'],
+        "name": ambulance['name'],
         "status": "waiting",
-        "ambulance": {"username": ambulance['username'], "name": ambulance['name'], "status": "waiting"},
-        "hospital": {"name": hospital['name']},
-        "patient_location": patient_location,
-        "eta_to_patient": eta_to_patient,
-        "eta_to_hospital": eta_to_hospital
-    }
-
+        "type": ambulance.get("type", "unknown"),
+        "location": ambulance.get("location")
+    },
+    "hospital": {
+        "name": hospital['name'],
+        "location": hospital.get("location")
+    },
+    "patient_location": patient_location,
+    "eta_to_patient": eta_to_patient,
+    "eta_to_hospital": eta_to_hospital,
+    "map_url": "/static/ambulance_dispatch_map.html"
+}

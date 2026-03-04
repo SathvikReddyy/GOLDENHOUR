@@ -79,7 +79,7 @@
   <!-- Auto-refresh dispatch status every 5 seconds -->
   <script>
     setInterval(() => {
-      fetch("{{ url_for('get_dispatch_status') }}")
+      fetch("{{ url_for('check_status') }}")
         .then(res => res.json())
         .then(data => {
           let statusBox = document.getElementById("dispatch-status");
